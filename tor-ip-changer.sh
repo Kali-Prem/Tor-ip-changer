@@ -1,52 +1,16 @@
 #!/bin/bash
 
 # ===============================
-# TOR IP CHANGER - ALL IN ONE
-# Kali Linux
+# TOR IP CHANGER - KALI LINUX
+# Fixed & Hardened
 # ===============================
-
-
-                                                                                                                                                                                                           
-                                                                                                                                                                                                           
-echo "TTTTTTTTTTTTTTTTTTTTTTT                                                    CCCCCCCCCCCCChhhhhhh"                                                                                                            
-echo "T:::::::::::::::::::::T                                                 CCC::::::::::::Ch:::::h"                                                                                                            
-echo "T:::::::::::::::::::::T                                               CC:::::::::::::::Ch:::::h"                                                                                                            
-echo "T:::::TT:::::::TT:::::T                                              C:::::CCCCCCCC::::Ch:::::h"                                                                                                            
-echo "TTTTTT  T:::::T  TTTTTTooooooooooo   rrrrr   rrrrrrrrr              C:::::C       CCCCCC h::::h hhhhh         aaaaaaaaaaaaa  nnnn  nnnnnnnn       ggggggggg   ggggg    eeeeeeeeeeee    rrrrr   rrrrrrrrr"   
-echo "        T:::::T      oo:::::::::::oo r::::rrr:::::::::r            C:::::C               h::::hh:::::hhh      a::::::::::::a n:::nn::::::::nn    g:::::::::ggg::::g  ee::::::::::::ee  r::::rrr:::::::::r"  
-echo "        T:::::T     o:::::::::::::::or:::::::::::::::::r           C:::::C               h::::::::::::::hh    aaaaaaaaa:::::an::::::::::::::nn  g:::::::::::::::::g e::::::eeeee:::::eer:::::::::::::::::r" 
-echo "        T:::::T     o:::::ooooo:::::orr::::::rrrrr::::::r          C:::::C               h:::::::hhh::::::h            a::::ann:::::::::::::::ng::::::ggggg::::::gge::::::e     e:::::err::::::rrrrr::::::r"
-echo "        T:::::T     o::::o     o::::o r:::::r     r:::::r          C:::::C               h::::::h   h::::::h    aaaaaaa:::::a  n:::::nnnn:::::ng:::::g     g:::::g e:::::::eeeee::::::e r:::::r     r:::::r"
-echo "        T:::::T     o::::o     o::::o r:::::r     rrrrrrr          C:::::C               h:::::h     h:::::h  aa::::::::::::a  n::::n    n::::ng:::::g     g:::::g e:::::::::::::::::e  r:::::r     rrrrrrr"
-echo "        T:::::T     o::::o     o::::o r:::::r                      C:::::C               h:::::h     h:::::h a::::aaaa::::::a  n::::n    n::::ng:::::g     g:::::g e::::::eeeeeeeeeee   r:::::r"            
-echo "        T:::::T     o::::o     o::::o r:::::r                       C:::::C       CCCCCC h:::::h     h:::::ha::::a    a:::::a  n::::n    n::::ng::::::g    g:::::g e:::::::e            r:::::r"            
-echo "      TT:::::::TT   o:::::ooooo:::::o r:::::r                        C:::::CCCCCCCC::::C h:::::h     h:::::ha::::a    a:::::a  n::::n    n::::ng:::::::ggggg:::::g e::::::::e           r:::::r"            
-echo "      T:::::::::T   o:::::::::::::::o r:::::r                         CC:::::::::::::::C h:::::h     h:::::ha:::::aaaa::::::a  n::::n    n::::n g::::::::::::::::g  e::::::::eeeeeeee   r:::::r"            
-echo "      T:::::::::T    oo:::::::::::oo  r:::::r                           CCC::::::::::::C h:::::h     h:::::h a::::::::::aa:::a n::::n    n::::n  gg::::::::::::::g   ee:::::::::::::e   r:::::r"            
-echo "      TTTTTTTTTTT      ooooooooooo    rrrrrrr                              CCCCCCCCCCCCC hhhhhhh     hhhhhhh  aaaaaaaaaa  aaaa nnnnnn    nnnnnn    gggggggg::::::g     eeeeeeeeeeeeee   rrrrrrr"            
-echo "                                                                                                                                                           g:::::g"                                         
-echo "                                                                                                                                               gggggg      g:::::g"                                         
-echo "                                                                                                                                               g:::::gg   gg:::::g"                                         
-echo "                                                                                                                                                g::::::ggg:::::::g "                                        
-echo "                                                                                                                                                 gg:::::::::::::g"                                          
-echo "                                                                                                                                                   ggg::::::ggg"                                            
-echo "                                                                                                                                                      gggggg"                                               
-
-echo "Created by: Kali-Prem"
-echo "GitHub:- https://github.com/Kali-Prem"
-
-echo "Version: 1.0.0"
-
-
-
-
-
-
 
 TORRC="/etc/tor/torrc"
 CONTROL_PORT=9051
+SOCKS_PORT=9050
 CHECK_IP_URL="https://ifconfig.me"
 AUTO_RENEW_PID="/tmp/tor_auto_renew.pid"
+TOR_SERVICE="tor@default"
 
 require_root() {
     if [[ $EUID -ne 0 ]]; then
@@ -57,49 +21,74 @@ require_root() {
 
 install_all() {
     echo "[+] Installing Tor & requirements..."
-    apt update -y
-    apt install -y tor proxychains4 curl netcat iptables
+    apt update
+    apt install -y tor curl netcat-openbsd iptables
 
-    echo "[+] Configuring Tor ControlPort..."
-    sed -i '/ControlPort/d' $TORRC
-    sed -i '/CookieAuthentication/d' $TORRC
-    echo "ControlPort 9051" >> $TORRC
-    echo "CookieAuthentication 1" >> $TORRC
+    echo "[+] Preparing torrc..."
+    mkdir -p /etc/tor
+    touch "$TORRC"
+    chmod 644 "$TORRC"
 
-    systemctl enable tor
-    systemctl restart tor
+    sed -i '/^ControlPort/d' "$TORRC"
+    sed -i '/^CookieAuthentication/d' "$TORRC"
+    sed -i '/^ExitNodes/d' "$TORRC"
+    sed -i '/^StrictNodes/d' "$TORRC"
 
-    echo "[✓] Installation complete"
+    cat <<EOF >> "$TORRC"
+ControlPort 9051
+CookieAuthentication 1
+EOF
+
+    echo "[+] Enabling Tor service..."
+    systemctl enable "$TOR_SERVICE"
+    systemctl restart "$TOR_SERVICE"
+
+    sleep 2
+    systemctl is-active --quiet "$TOR_SERVICE" \
+        && echo "[✓] Tor installed and running" \
+        || echo "[!] Tor failed to start"
+}
+
+start_tor() {
+    systemctl start "$TOR_SERVICE"
+    echo "[✓] Tor started"
+}
+
+stop_tor() {
+    systemctl stop "$TOR_SERVICE"
+    echo "[✓] Tor stopped"
 }
 
 get_ip() {
-    proxychains -q curl -s $CHECK_IP_URL
+    curl --socks5 127.0.0.1:$SOCKS_PORT -s "$CHECK_IP_URL" || echo "Tor not running"
 }
 
 renew_ip() {
-    echo -e 'AUTHENTICATE ""\r\nSIGNAL NEWNYM\r\nQUIT' \
-    | nc 127.0.0.1 $CONTROL_PORT > /dev/null
+    echo -e 'AUTHENTICATE ""\nSIGNAL NEWNYM\nQUIT' \
+        | nc 127.0.0.1 $CONTROL_PORT >/dev/null 2>&1
+
+    echo "[✓] IP Renew requested"
 }
 
 auto_renew() {
     read -p "Enter renew interval (minutes): " MIN
-    echo "[+] Auto renew every $MIN minutes"
+    [[ ! "$MIN" =~ ^[0-9]+$ ]] && echo "Invalid number" && return
 
     (
         while true; do
-            sleep $(($MIN * 60))
+            sleep $((MIN * 60))
             renew_ip
         done
     ) &
 
-    echo $! > $AUTO_RENEW_PID
-    echo "[✓] Auto renew started"
+    echo $! > "$AUTO_RENEW_PID"
+    echo "[✓] Auto renew every $MIN minutes"
 }
 
 stop_auto_renew() {
-    if [[ -f $AUTO_RENEW_PID ]]; then
-        kill "$(cat $AUTO_RENEW_PID)" 2>/dev/null
-        rm -f $AUTO_RENEW_PID
+    if [[ -f "$AUTO_RENEW_PID" ]]; then
+        kill "$(cat "$AUTO_RENEW_PID")" 2>/dev/null
+        rm -f "$AUTO_RENEW_PID"
         echo "[✓] Auto renew stopped"
     else
         echo "[!] Auto renew not running"
@@ -108,23 +97,28 @@ stop_auto_renew() {
 
 set_country() {
     read -p "Enter exit country code (US, DE, FR, NL): " COUNTRY
-    sed -i '/ExitNodes/d' $TORRC
-    sed -i '/StrictNodes/d' $TORRC
-    echo "ExitNodes {$COUNTRY}" >> $TORRC
-    echo "StrictNodes 1" >> $TORRC
-    systemctl restart tor
+    COUNTRY=$(echo "$COUNTRY" | tr -d '{}')
+
+    sed -i '/^ExitNodes/d' "$TORRC"
+    sed -i '/^StrictNodes/d' "$TORRC"
+
+    echo "ExitNodes {$COUNTRY}" >> "$TORRC"
+    echo "StrictNodes 1" >> "$TORRC"
+
+    systemctl restart "$TOR_SERVICE"
     echo "[✓] Exit country set to $COUNTRY"
 }
 
 kill_switch_on() {
-    TOR_UID=$(id -u debian-tor)
+    TOR_UID=$(id -u debian-tor 2>/dev/null)
+    [[ -z "$TOR_UID" ]] && echo "[!] Tor user not found" && return
 
     iptables -F
     iptables -P OUTPUT DROP
-    iptables -A OUTPUT -m owner --uid-owner $TOR_UID -j ACCEPT
+    iptables -A OUTPUT -m owner --uid-owner "$TOR_UID" -j ACCEPT
     iptables -A OUTPUT -o lo -j ACCEPT
-    iptables -A OUTPUT -p tcp --dport 9050 -j ACCEPT
-    iptables -A OUTPUT -p tcp --dport 9051 -j ACCEPT
+    iptables -A OUTPUT -p tcp --dport $SOCKS_PORT -j ACCEPT
+    iptables -A OUTPUT -p tcp --dport $CONTROL_PORT -j ACCEPT
 
     echo "[✓] Kill switch ENABLED"
 }
@@ -158,11 +152,11 @@ menu() {
     echo "======================================"
     read -p "Select option: " CHOICE
 
-    case $CHOICE in
+    case "$CHOICE" in
         1) install_all ;;
-        2) systemctl start tor && echo "[✓] Tor started" ;;
-        3) systemctl stop tor && echo "[✓] Tor stopped" ;;
-        4) echo "[+] Current IP:" && get_ip ;;
+        2) start_tor ;;
+        3) stop_tor ;;
+        4) echo "[+] Current Tor IP:" && get_ip ;;
         5) renew_ip && sleep 5 && get_ip ;;
         6) auto_renew ;;
         7) stop_auto_renew ;;
