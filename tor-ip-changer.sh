@@ -1,138 +1,174 @@
-#!/usr/bin/env python3
+#!/bin/bash
 
-import os
-import sys
-import time
-import socket
-import subprocess
-import requests
+# ===============================
+# TOR IP CHANGER - KALI LINUX
+# Fixed & Hardened
+# ===============================
 
-TOR_CONTROL_PORT = 9051
-TOR_SOCKS_PORT = 9050
-CHECK_IP_URL = "https://httpbin.org/ip"
-TOR_SERVICE = "tor@default"
+TORRC="/etc/tor/torrc"
+CONTROL_PORT=9051
+SOCKS_PORT=9050
+CHECK_IP_URL="https://ifconfig.me"
+AUTO_RENEW_PID="/tmp/tor_auto_renew.pid"
+TOR_SERVICE="tor@default"
 
-PROXY = {
-    "http": "socks5h://127.0.0.1:9050",
-    "https": "socks5h://127.0.0.1:9050",
+require_root() {
+    if [[ $EUID -ne 0 ]]; then
+        echo "[!] Run as root: sudo ./tor-ip-changer.sh"
+        exit 1
+    fi
 }
 
-# =========================
-# UTILITIES
-# =========================
+install_all() {
+    echo "[+] Installing Tor & requirements..."
+    apt update
+    apt install -y tor curl netcat-openbsd iptables
 
-def require_root():
-    if os.geteuid() != 0:
-        sys.exit("\033[1;91m[!] Run this script as root.\033[0m")
+    echo "[+] Preparing torrc..."
+    mkdir -p /etc/tor
+    touch "$TORRC"
+    chmod 644 "$TORRC"
 
-def clear():
-    os.system("clear")
+    sed -i '/^ControlPort/d' "$TORRC"
+    sed -i '/^CookieAuthentication/d' "$TORRC"
+    sed -i '/^ExitNodes/d' "$TORRC"
+    sed -i '/^StrictNodes/d' "$TORRC"
 
-def banner():
-    print("\033[1;92m")
-    print(" TOR IP CHANGER - CONTROLPORT EDITION ")
-    print(" Author : isPique (Reviewed & Fixed)")
-    print(" Version: 2.1")
-    print("\033[0m")
+    cat <<EOF >> "$TORRC"
+ControlPort 9051
+CookieAuthentication 1
+EOF
 
-# =========================
-# TOR FUNCTIONS
-# =========================
+    echo "[+] Enabling Tor service..."
+    systemctl enable "$TOR_SERVICE"
+    systemctl restart "$TOR_SERVICE"
 
-def tor_running():
-    result = subprocess.run(
-        ["systemctl", "is-active", TOR_SERVICE],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True
-    )
-    return result.stdout.strip() == "active"
+    sleep 2
+    systemctl is-active --quiet "$TOR_SERVICE" \
+        && echo "[✓] Tor installed and running" \
+        || echo "[!] Tor failed to start"
+}
 
-def start_tor():
-    if not tor_running():
-        subprocess.run(["systemctl", "start", TOR_SERVICE], check=False)
-        time.sleep(5)
+start_tor() {
+    systemctl start "$TOR_SERVICE"
+    echo "[✓] Tor started"
+}
 
-def stop_tor():
-    subprocess.run(["systemctl", "stop", TOR_SERVICE], check=False)
+stop_tor() {
+    systemctl stop "$TOR_SERVICE"
+    echo "[✓] Tor stopped"
+}
 
-def wait_for_tor():
-    for _ in range(30):
-        try:
-            requests.get(CHECK_IP_URL, proxies=PROXY, timeout=5)
-            return True
-        except:
-            time.sleep(1)
-    return False
+get_ip() {
+    curl --socks5 127.0.0.1:$SOCKS_PORT -s "$CHECK_IP_URL" || echo "Tor not running"
+}
 
-def renew_ip():
-    try:
-        with socket.create_connection(("127.0.0.1", TOR_CONTROL_PORT), timeout=5) as s:
-            s.sendall(b'AUTHENTICATE ""\r\n')
-            s.sendall(b'SIGNAL NEWNYM\r\n')
-            s.sendall(b'QUIT\r\n')
-    except Exception as e:
-        print(f"\033[1;91m[-] ControlPort error: {e}\033[0m")
+renew_ip() {
+    echo -e 'AUTHENTICATE ""\nSIGNAL NEWNYM\nQUIT' \
+        | nc 127.0.0.1 $CONTROL_PORT >/dev/null 2>&1
 
-# =========================
-# IP FUNCTIONS
-# =========================
+    echo "[✓] IP Renew requested"
+}
 
-def get_ip(use_tor=False):
-    try:
-        r = requests.get(
-            CHECK_IP_URL,
-            proxies=PROXY if use_tor else None,
-            timeout=10
-        )
-        return r.json().get("origin", "Unknown")
-    except:
-        return "Unavailable"
+auto_renew() {
+    read -p "Enter renew interval (minutes): " MIN
+    [[ ! "$MIN" =~ ^[0-9]+$ ]] && echo "Invalid number" && return
 
-# =========================
-# MAIN
-# =========================
+    (
+        while true; do
+            sleep $((MIN * 60))
+            renew_ip
+        done
+    ) &
 
-def main():
-    require_root()
-    clear()
-    banner()
+    echo $! > "$AUTO_RENEW_PID"
+    echo "[✓] Auto renew every $MIN minutes"
+}
 
-    print("\033[1;34m[*] Checking Tor installation...\033[0m")
-    if subprocess.run(["which", "tor"], stdout=subprocess.DEVNULL).returncode != 0:
-        sys.exit("\033[1;91m[-] Tor is not installed.\033[0m")
+stop_auto_renew() {
+    if [[ -f "$AUTO_RENEW_PID" ]]; then
+        kill "$(cat "$AUTO_RENEW_PID")" 2>/dev/null
+        rm -f "$AUTO_RENEW_PID"
+        echo "[✓] Auto renew stopped"
+    else
+        echo "[!] Auto renew not running"
+    fi
+}
 
-    start_tor()
+set_country() {
+    read -p "Enter exit country code (US, DE, FR, NL): " COUNTRY
+    COUNTRY=$(echo "$COUNTRY" | tr -d '{}')
 
-    if not wait_for_tor():
-        sys.exit("\033[1;91m[-] Tor failed to start.\033[0m")
+    sed -i '/^ExitNodes/d' "$TORRC"
+    sed -i '/^StrictNodes/d' "$TORRC"
 
-    print(f"\033[1;92m[+] Current IP (Normal): {get_ip()}\033[0m")
-    print(f"\033[1;92m[+] Current IP (Tor):    {get_ip(True)}\033[0m")
+    echo "ExitNodes {$COUNTRY}" >> "$TORRC"
+    echo "StrictNodes 1" >> "$TORRC"
 
-    try:
-        interval = int(input("\n\033[1;93m[>] Change IP every (seconds): \033[0m"))
-        if interval < 10:
-            raise ValueError
-    except:
-        sys.exit("\033[1;91m[-] Interval must be >= 10 seconds.\033[0m")
+    systemctl restart "$TOR_SERVICE"
+    echo "[✓] Exit country set to $COUNTRY"
+}
 
-    print("\033[1;91m[!] Press CTRL+C to stop.\033[0m\n")
+kill_switch_on() {
+    TOR_UID=$(id -u debian-tor 2>/dev/null)
+    [[ -z "$TOR_UID" ]] && echo "[!] Tor user not found" && return
 
-    while True:
-        renew_ip()
-        time.sleep(10)  # Tor cooldown
-        new_ip = get_ip(True)
-        print(f"\033[1;92m[+] New Tor IP: {new_ip}\033[0m")
-        time.sleep(interval)
+    iptables -F
+    iptables -P OUTPUT DROP
+    iptables -A OUTPUT -m owner --uid-owner "$TOR_UID" -j ACCEPT
+    iptables -A OUTPUT -o lo -j ACCEPT
+    iptables -A OUTPUT -p tcp --dport $SOCKS_PORT -j ACCEPT
+    iptables -A OUTPUT -p tcp --dport $CONTROL_PORT -j ACCEPT
 
-# =========================
-# ENTRY
-# =========================
+    echo "[✓] Kill switch ENABLED"
+}
 
-if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\n\033[1;93m[!] Exiting...\033[0m")
-        stop_tor()
+kill_switch_off() {
+    iptables -F
+    iptables -P OUTPUT ACCEPT
+    echo "[✓] Kill switch DISABLED"
+}
+
+pause() {
+    read -p "Press Enter to continue..."
+}
+
+menu() {
+    clear
+    echo "======================================"
+    echo "      TOR IP CHANGER - KALI LINUX"
+    echo "======================================"
+    echo "1) Install & Setup Everything"
+    echo "2) Start Tor"
+    echo "3) Stop Tor"
+    echo "4) Show Current Tor IP"
+    echo "5) Renew IP (NEWNYM)"
+    echo "6) Auto Renew Every X Minutes"
+    echo "7) Stop Auto Renew"
+    echo "8) Set Exit Country"
+    echo "9) Enable Kill Switch"
+    echo "10) Disable Kill Switch"
+    echo "0) Exit"
+    echo "======================================"
+    read -p "Select option: " CHOICE
+
+    case "$CHOICE" in
+        1) install_all ;;
+        2) start_tor ;;
+        3) stop_tor ;;
+        4) echo "[+] Current Tor IP:" && get_ip ;;
+        5) renew_ip && sleep 5 && get_ip ;;
+        6) auto_renew ;;
+        7) stop_auto_renew ;;
+        8) set_country ;;
+        9) kill_switch_on ;;
+        10) kill_switch_off ;;
+        0) exit 0 ;;
+        *) echo "[!] Invalid option" ;;
+    esac
+
+    pause
+}
+
+require_root
+while true; do menu; done
