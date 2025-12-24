@@ -50,7 +50,7 @@ Built for **privacy‑focused users, penetration testers, and security researche
 ## 📦 Installation
 
 ```bash
-git clone https://github.com/yourusername/tor-ip-changer
+git clone https://github.com/Kali-Prem/tor-ip-changer
 cd tor-ip-changer
 chmod +x tor-ip-changer.sh
 sudo ./tor-ip-changer.sh
