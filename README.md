@@ -91,7 +91,7 @@ Route applications through Tor:
 
 ### Route applications through Tor
 
-![Setup in Browser](image/Screenshot (10).png)
+![Setup in Browser](image/setup.png)
 
 
 ---
