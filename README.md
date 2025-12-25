@@ -83,8 +83,6 @@ Route applications through Tor:
 
 ## 🖼️ Screenshots
 
-> *(Add real screenshots here)*
-
 ### Main Menu
 
 ![Main Menu](image/final.png)
