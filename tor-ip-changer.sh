@@ -12,128 +12,114 @@ CHECK_IP_URL="https://check.torproject.org/api/ip"
 NYM_WAIT=15
 AUTO_RENEW_PID="/tmp/tor_auto_renew.pid"
 
+# ---------- UTILS ----------
+
 require_root() {
     [[ $EUID -ne 0 ]] && echo "[!] Run as root" && exit 1
 }
 
+tor_status() {
+    systemctl is-active --quiet "$TOR_SERVICE" && echo "RUNNING" || echo "STOPPED"
+}
+
+get_ip() {
+    curl --socks5-hostname 127.0.0.1:$SOCKS_PORT \
+         -H "Connection: close" -s "$CHECK_IP_URL" \
+         | grep -oE '"IP":"[^"]+' | cut -d'"' -f4
+}
+
+# ---------- BANNER ----------
+
+tor_changer_banner() {
+    clear
+    STATUS=$(tor_status)
+    IP=$(get_ip)
+    [[ -z "$IP" ]] && IP="N/A"
+
+    echo -e "\e[38;5;51m████████╗ \e[38;5;45m██████╗ \e[38;5;39m██████╗     \e[38;5;33m██████╗ \e[38;5;27m██╗  ██╗ \e[38;5;21m █████╗ \e[38;5;93m███╗   ██╗ \e[38;5;87m███████╗ \e[0m"
+    echo -e "\e[38;5;51m╚══██╔══╝ \e[38;5;45m██╔═══██╗\e[38;5;39m██╔═══██╗    \e[38;5;33m██╔════╝ \e[38;5;27m██║  ██║ \e[38;5;21m██╔══██╗\e[38;5;93m████╗  ██║ \e[38;5;87m██╔════╝ \e[0m"
+    echo -e "\e[38;5;51m   ██║    \e[38;5;45m██║   ██║\e[38;5;39m██║   ██║    \e[38;5;33m██║      \e[38;5;27m███████║ \e[38;5;21m███████║\e[38;5;93m██╔██╗ ██║ \e[38;5;87m█████╗   \e[0m"
+    echo -e "\e[38;5;51m   ██║    \e[38;5;45m██║   ██║\e[38;5;39m██║   ██║    \e[38;5;33m██║      \e[38;5;27m██╔══██║ \e[38;5;21m██╔══██║\e[38;5;93m██║╚██╗██║ \e[38;5;87m██╔══╝   \e[0m"
+    echo -e "\e[38;5;51m   ██║    \e[38;5;45m╚██████╔╝\e[38;5;39m╚██████╔╝    \e[38;5;33m╚██████╗ \e[38;5;27m██║  ██║ \e[38;5;21m██║  ██║\e[38;5;93m██║ ╚████║ \e[38;5;87m███████╗ \e[0m"
+    echo -e "\e[38;5;51m   ╚═╝     \e[38;5;45m╚═════╝  \e[38;5;39m╚═════╝     \e[38;5;33m ╚═════╝ \e[38;5;27m╚═╝  ╚═╝ \e[38;5;21m╚═╝  ╚═╝\e[38;5;93m╚═╝  ╚═══╝ \e[38;5;87m╚══════╝ \e[0m"
+    echo
+    echo -e "\e[38;5;118m Tor Changer — Real IP Rotation via Tor ControlPort\e[0m"
+    echo -e "\e[38;5;244m Status : $STATUS   |   Tor IP : $IP\e[0m"
+    echo -e "\e[38;5;244m Author : Kali-Prem | GitHub : https://github.com/Kali-Prem\e[0m"
+    echo
+}
+
+# ---------- TOR LOGIC ----------
+
 install_all() {
-    echo "[+] Installing requirements..."
     apt update
     apt install -y tor curl netcat-openbsd iptables
 
-    echo "[+] Writing hardened torrc..."
     cat <<EOF > "$TORRC"
 SOCKSPort 9050
 ControlPort 9051
 CookieAuthentication 1
-
 UseEntryGuards 0
 NewCircuitPeriod 10
 MaxCircuitDirtiness 10
-CircuitBuildTimeout 5
-
-ClientOnly 1
-AvoidDiskWrites 1
 EOF
 
     systemctl enable "$TOR_SERVICE"
     systemctl restart "$TOR_SERVICE"
-
-    echo "[+] Waiting for Tor bootstrap..."
-    sleep 8
-    journalctl -u "$TOR_SERVICE" -n 5 --no-pager
+    sleep 5
 }
 
 start_tor() {
     systemctl start "$TOR_SERVICE"
     sleep 5
-    echo "[✓] Tor started"
 }
 
 stop_tor() {
     systemctl stop "$TOR_SERVICE"
-    echo "[✓] Tor stopped"
-}
-
-get_ip() {
-    curl --socks5-hostname 127.0.0.1:$SOCKS_PORT \
-         -H "Connection: close" \
-         -s "$CHECK_IP_URL" \
-         | grep -oE '"IP":"[^"]+' | cut -d'"' -f4
 }
 
 renew_ip() {
-    echo -e 'AUTHENTICATE ""\nSIGNAL NEWNYM\nQUIT' \
-        | nc 127.0.0.1 $CONTROL_PORT >/dev/null 2>&1
+    echo -e 'AUTHENTICATE ""\nSIGNAL NEWNYM\nQUIT' | nc 127.0.0.1 $CONTROL_PORT >/dev/null 2>&1
     sleep $NYM_WAIT
 }
 
 force_new_ip() {
     OLD_IP=$(get_ip)
-    echo "[*] Current IP: $OLD_IP"
-
     for i in {1..6}; do
-        echo "[*] Requesting new circuit..."
         renew_ip
         NEW_IP=$(get_ip)
-
-        if [[ -n "$NEW_IP" && "$NEW_IP" != "$OLD_IP" ]]; then
-            echo "[✓] IP CHANGED: $NEW_IP"
-            return
-        fi
-
-        echo "[-] Exit reused, retrying..."
-        sleep 10
+        [[ "$NEW_IP" != "$OLD_IP" && -n "$NEW_IP" ]] && break
     done
-
-    echo "[!] Tor reused exit node (normal Tor behavior)"
 }
 
 auto_renew() {
-    read -p "Auto renew interval (minutes ≥1): " MIN
-    [[ ! "$MIN" =~ ^[0-9]+$ || "$MIN" -lt 1 ]] && echo "Invalid interval" && return
-
+    read -p "Auto renew interval (minutes): " MIN
     (
         while true; do
             force_new_ip
             sleep $((MIN * 60))
         done
-    ) &
-
-    echo $! > "$AUTO_RENEW_PID"
-    echo "[✓] Auto renew enabled"
+    ) & echo $! > "$AUTO_RENEW_PID"
 }
 
 stop_auto_renew() {
-    [[ -f "$AUTO_RENEW_PID" ]] && kill "$(cat "$AUTO_RENEW_PID")" && rm -f "$AUTO_RENEW_PID" \
-        && echo "[✓] Auto renew stopped" || echo "[!] Not running"
+    [[ -f "$AUTO_RENEW_PID" ]] && kill "$(cat "$AUTO_RENEW_PID")" && rm -f "$AUTO_RENEW_PID"
 }
 
 pause() { read -p "Press Enter to continue..."; }
 
+# ---------- MENU ----------
+
 menu() {
-    clear
-    echo "============================================================================================="
-    echo  "|''||''|                         ..|'''.| '||                                               "
-    echo  "   ||      ...   ... ..        .|'     '   || ..    ....   .. ...     ... .   ....  ... ..  "
-    echo  "   ||    .|  '|.  ||' ''       ||          ||' ||  '' .||   ||  ||   || ||  .|...||  ||' '' "
-    echo  "   ||    ||   ||  ||           '|.      .  ||  ||  .|' ||   ||  ||    |''   ||       ||     "
-    echo  "  .||.    '|..|' .||.           ''|....'  .||. ||. '|..'|' .||. ||.  '||||.  '|...' .||.    "
-    echo  "                                                                     .|....'                 "
-    echo "   By:- Kali-Prem"
-    echo "   GitHub:- https://github.com/Kali-Prem"
-    echo "   Version:- 1.0.0 (Last Updated: Dec 2025)"
-    echo "============================================================================================="
-    
-    echo "1) Install & Setup (RECOMMENDED)"
+    tor_changer_banner
+    echo "1) Install & Setup"
     echo "2) Start Tor"
     echo "3) Stop Tor"
     echo "4) Show Tor IP"
-    echo "5) Force New IP (Verified)"
+    echo "5) Force New IP"
     echo "6) Auto Renew"
     echo "7) Stop Auto Renew"
     echo "0) Exit"
-    
     echo "======================================"
     read -p "Select option: " CHOICE
 
@@ -141,12 +127,11 @@ menu() {
         1) install_all ;;
         2) start_tor ;;
         3) stop_tor ;;
-        4) echo "[+] Tor IP: $(get_ip)" ;;
+        4) echo "Tor IP: $(get_ip)" ;;
         5) force_new_ip ;;
         6) auto_renew ;;
         7) stop_auto_renew ;;
         0) exit 0 ;;
-        *) echo "Invalid option" ;;
     esac
     pause
 }
