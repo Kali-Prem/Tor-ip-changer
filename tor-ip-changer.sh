@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==========================================
-# TOR IP CHANGER — FINAL FIX (KALI LINUX)
+# TOR IP CHANGER — FULL FEATURED (KALI)
 # ==========================================
 
 TOR_SERVICE="tor@default"
@@ -12,7 +12,7 @@ CHECK_IP_URL="https://check.torproject.org/api/ip"
 NYM_WAIT=15
 AUTO_RENEW_PID="/tmp/tor_auto_renew.pid"
 
-# ---------- UTILS ----------
+# ---------- CORE UTILS ----------
 
 require_root() {
     [[ $EUID -ne 0 ]] && echo "[!] Run as root" && exit 1
@@ -36,16 +36,51 @@ tor_changer_banner() {
     IP=$(get_ip)
     [[ -z "$IP" ]] && IP="N/A"
 
-    echo -e "\e[38;5;51m████████╗ \e[38;5;45m██████╗ \e[38;5;39m██████╗     \e[38;5;33m██████╗ \e[38;5;27m██╗  ██╗ \e[38;5;21m █████╗ \e[38;5;93m███╗   ██╗ \e[38;5;87m███████╗ \e[0m"
-    echo -e "\e[38;5;51m╚══██╔══╝ \e[38;5;45m██╔═══██╗\e[38;5;39m██╔═══██╗    \e[38;5;33m██╔════╝ \e[38;5;27m██║  ██║ \e[38;5;21m██╔══██╗\e[38;5;93m████╗  ██║ \e[38;5;87m██╔════╝ \e[0m"
-    echo -e "\e[38;5;51m   ██║    \e[38;5;45m██║   ██║\e[38;5;39m██║   ██║    \e[38;5;33m██║      \e[38;5;27m███████║ \e[38;5;21m███████║\e[38;5;93m██╔██╗ ██║ \e[38;5;87m█████╗   \e[0m"
-    echo -e "\e[38;5;51m   ██║    \e[38;5;45m██║   ██║\e[38;5;39m██║   ██║    \e[38;5;33m██║      \e[38;5;27m██╔══██║ \e[38;5;21m██╔══██║\e[38;5;93m██║╚██╗██║ \e[38;5;87m██╔══╝   \e[0m"
-    echo -e "\e[38;5;51m   ██║    \e[38;5;45m╚██████╔╝\e[38;5;39m╚██████╔╝    \e[38;5;33m╚██████╗ \e[38;5;27m██║  ██║ \e[38;5;21m██║  ██║\e[38;5;93m██║ ╚████║ \e[38;5;87m███████╗ \e[0m"
-    echo -e "\e[38;5;51m   ╚═╝     \e[38;5;45m╚═════╝  \e[38;5;39m╚═════╝     \e[38;5;33m ╚═════╝ \e[38;5;27m╚═╝  ╚═╝ \e[38;5;21m╚═╝  ╚═╝\e[38;5;93m╚═╝  ╚═══╝ \e[38;5;87m╚══════╝ \e[0m"
+    echo -e "\e[38;5;51m████████╗ \e[38;5;45m██████╗ \e[38;5;39m██████╗     \e[38;5;33m██████╗ \e[38;5;27m██╗  ██╗ \e[38;5;21m █████╗ \e[38;5;93m███╗   ██╗ \e[38;5;87m███████╗\e[0m"
+    echo -e "\e[38;5;51m╚══██╔══╝ \e[38;5;45m██╔═══██╗\e[38;5;39m██╔═══██╗    \e[38;5;33m██╔════╝ \e[38;5;27m██║  ██║ \e[38;5;21m██╔══██╗\e[38;5;93m████╗  ██║ \e[38;5;87m██╔════╝\e[0m"
+    echo -e "\e[38;5;51m   ██║    \e[38;5;45m██║   ██║\e[38;5;39m██║   ██║    \e[38;5;33m██║      \e[38;5;27m███████║ \e[38;5;21m███████║\e[38;5;93m██╔██╗ ██║ \e[38;5;87m█████╗\e[0m"
+    echo -e "\e[38;5;51m   ██║    \e[38;5;45m██║   ██║\e[38;5;39m██║   ██║    \e[38;5;33m██║      \e[38;5;27m██╔══██║ \e[38;5;21m██╔══██║\e[38;5;93m██║╚██╗██║ \e[38;5;87m██╔══╝\e[0m"
+    echo -e "\e[38;5;51m   ██║    \e[38;5;45m╚██████╔╝\e[38;5;39m╚██████╔╝    \e[38;5;33m╚██████╗ \e[38;5;27m██║  ██║ \e[38;5;21m██║  ██║\e[38;5;93m██║ ╚████║ \e[38;5;87m███████╗\e[0m"
+    echo -e "\e[38;5;51m   ╚═╝     \e[38;5;45m╚═════╝  \e[38;5;39m╚═════╝     \e[38;5;33m ╚═════╝ \e[38;5;27m╚═╝  ╚═╝ \e[38;5;21m╚═╝  ╚═╝\e[38;5;93m╚═╝  ╚═══╝ \e[38;5;87m╚══════╝\e[0m"
     echo
     echo -e "\e[38;5;118m Tor Changer — Real IP Rotation via Tor ControlPort\e[0m"
     echo -e "\e[38;5;244m Status : $STATUS   |   Tor IP : $IP\e[0m"
-    echo -e "\e[38;5;244m Author : Kali-Prem | GitHub : https://github.com/Kali-Prem\e[0m"
+    echo -e "\e[38;5;244m Author : Kali-Prem | Platform : Kali Linux\e[0m"
+    echo
+}
+
+# ---------- RUNTIME STATUS ----------
+
+show_runtime_status() {
+    echo "------------------ Runtime Status ------------------"
+
+    systemctl is-active --quiet "$TOR_SERVICE" \
+        && echo "[Tor Service]      : RUNNING" \
+        || echo "[Tor Service]      : STOPPED"
+
+    TOR_PIDS=$(pgrep -x tor | tr '\n' ' ')
+    [[ -z "$TOR_PIDS" ]] && TOR_PIDS="None"
+    echo "[Tor PID(s)]       : $TOR_PIDS"
+
+    ss -tulnp | grep -q ":$SOCKS_PORT" \
+        && echo "[SOCKS 9050]       : LISTENING" \
+        || echo "[SOCKS 9050]       : NOT LISTENING"
+
+    ss -tulnp | grep -q ":$CONTROL_PORT" \
+        && echo "[Control 9051]     : LISTENING" \
+        || echo "[Control 9051]     : NOT LISTENING"
+
+    if [[ -f "$AUTO_RENEW_PID" ]] && ps -p "$(cat $AUTO_RENEW_PID)" &>/dev/null; then
+        echo "[Auto Renew]       : RUNNING (PID $(cat $AUTO_RENEW_PID))"
+    else
+        echo "[Auto Renew]       : STOPPED"
+    fi
+
+    IP=$(get_ip)
+    [[ -z "$IP" ]] && IP="N/A"
+    echo "[Current Tor IP]   : $IP"
+
+    echo "----------------------------------------------------"
     echo
 }
 
@@ -69,14 +104,8 @@ EOF
     sleep 5
 }
 
-start_tor() {
-    systemctl start "$TOR_SERVICE"
-    sleep 5
-}
-
-stop_tor() {
-    systemctl stop "$TOR_SERVICE"
-}
+start_tor() { systemctl start "$TOR_SERVICE"; sleep 5; }
+stop_tor()  { systemctl stop "$TOR_SERVICE"; }
 
 renew_ip() {
     echo -e 'AUTHENTICATE ""\nSIGNAL NEWNYM\nQUIT' | nc 127.0.0.1 $CONTROL_PORT >/dev/null 2>&1
@@ -85,7 +114,7 @@ renew_ip() {
 
 force_new_ip() {
     OLD_IP=$(get_ip)
-    for i in {1..6}; do
+    for _ in {1..6}; do
         renew_ip
         NEW_IP=$(get_ip)
         [[ "$NEW_IP" != "$OLD_IP" && -n "$NEW_IP" ]] && break
@@ -121,8 +150,10 @@ menu() {
     echo "7) Stop Auto Renew"
     echo "0) Exit"
     echo "======================================"
-    read -p "Select option: " CHOICE
 
+    show_runtime_status
+
+    read -p "Select option: " CHOICE
     case "$CHOICE" in
         1) install_all ;;
         2) start_tor ;;
