@@ -10,7 +10,9 @@ SOCKS_PORT=9050
 CONTROL_PORT=9051
 CHECK_IP_URL="https://check.torproject.org/api/ip"
 NYM_WAIT=15
+
 AUTO_RENEW_PID="/tmp/tor_auto_renew.pid"
+NEXT_RENEW_FILE="/tmp/tor_next_renew.time"
 
 # ---------- CORE UTILS ----------
 
@@ -26,6 +28,18 @@ get_ip() {
     curl --socks5-hostname 127.0.0.1:$SOCKS_PORT \
          -H "Connection: close" -s "$CHECK_IP_URL" \
          | grep -oE '"IP":"[^"]+' | cut -d'"' -f4
+}
+
+get_countdown() {
+    [[ ! -f "$NEXT_RENEW_FILE" ]] && echo "N/A" && return
+
+    NOW=$(date +%s)
+    NEXT=$(cat "$NEXT_RENEW_FILE")
+
+    [[ "$NEXT" -le "$NOW" ]] && echo "00:00" && return
+
+    REMAIN=$((NEXT - NOW))
+    printf "%02d:%02d" $((REMAIN / 60)) $((REMAIN % 60))
 }
 
 # ---------- BANNER ----------
@@ -72,8 +86,10 @@ show_runtime_status() {
 
     if [[ -f "$AUTO_RENEW_PID" ]] && ps -p "$(cat $AUTO_RENEW_PID)" &>/dev/null; then
         echo "[Auto Renew]       : RUNNING (PID $(cat $AUTO_RENEW_PID))"
+        echo "[Next IP Change]   : $(get_countdown)"
     else
         echo "[Auto Renew]       : STOPPED"
+        echo "[Next IP Change]   : N/A"
     fi
 
     IP=$(get_ip)
@@ -123,16 +139,22 @@ force_new_ip() {
 
 auto_renew() {
     read -p "Auto renew interval (minutes): " MIN
+    INTERVAL=$((MIN * 60))
+
+    date +%s | awk "{print \$1 + $INTERVAL}" > "$NEXT_RENEW_FILE"
+
     (
         while true; do
             force_new_ip
-            sleep $((MIN * 60))
+            date +%s | awk "{print \$1 + $INTERVAL}" > "$NEXT_RENEW_FILE"
+            sleep "$INTERVAL"
         done
     ) & echo $! > "$AUTO_RENEW_PID"
 }
 
 stop_auto_renew() {
     [[ -f "$AUTO_RENEW_PID" ]] && kill "$(cat "$AUTO_RENEW_PID")" && rm -f "$AUTO_RENEW_PID"
+    rm -f "$NEXT_RENEW_FILE"
 }
 
 pause() { read -p "Press Enter to continue..."; }
@@ -141,7 +163,7 @@ pause() { read -p "Press Enter to continue..."; }
 
 menu() {
     tor_changer_banner
-    echo "1) Install & Setup(recommended)"
+    echo "1) Install & Setup"
     echo "2) Start Tor"
     echo "3) Stop Tor"
     echo "4) Show Tor IP"
