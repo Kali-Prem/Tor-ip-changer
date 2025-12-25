@@ -64,6 +64,7 @@ tor_changer_banner() {
 show_runtime_status() {
     echo "------------------ Running Status ------------------"
     echo "Tor Service     : $(tor_status)"
+    echo "Tor IP          : $(get_ip)"
     echo "Tor PID(s)      : $(pgrep -x tor | tr '\n' ' ' || echo None)"
     ss -lnt | grep -q ":$SOCKS_PORT" && echo "SOCKS 9050     : LISTENING" || echo "SOCKS 9050     : NOT LISTENING"
     ss -lnt | grep -q ":$CONTROL_PORT" && echo "Control 9051   : LISTENING" || echo "Control 9051   : NOT LISTENING"
