@@ -13,6 +13,7 @@ NYM_WAIT=15
 
 AUTO_RENEW_PID="/tmp/tor_auto_renew.pid"
 NEXT_RENEW_FILE="/tmp/tor_next_renew.time"
+COUNTDOWN_PID="/tmp/tor_countdown.pid"
 
 # ---------- CORE UTILS ----------
 
@@ -32,14 +33,58 @@ get_ip() {
 
 get_countdown() {
     [[ ! -f "$NEXT_RENEW_FILE" ]] && echo "N/A" && return
-
     NOW=$(date +%s)
     NEXT=$(cat "$NEXT_RENEW_FILE")
-
     [[ "$NEXT" -le "$NOW" ]] && echo "00:00" && return
-
     REMAIN=$((NEXT - NOW))
     printf "%02d:%02d" $((REMAIN / 60)) $((REMAIN % 60))
+}
+
+# ---------- NOTIFICATION ----------
+
+notify_ip_change() {
+    local OLD_IP="$1"
+    local NEW_IP="$2"
+
+    # Terminal beep
+    echo -ne "\a"
+
+    # Desktop notification (if available)
+    if command -v notify-send &>/dev/null; then
+        notify-send "Tor IP Changed" \
+            "Old IP: $OLD_IP\nNew IP: $NEW_IP" \
+            --icon=network-vpn --urgency=low
+    fi
+}
+
+# ---------- LIVE COUNTDOWN ----------
+
+live_countdown() {
+    (
+        while true; do
+            [[ ! -f "$NEXT_RENEW_FILE" ]] && sleep 1 && continue
+
+            NOW=$(date +%s)
+            NEXT=$(cat "$NEXT_RENEW_FILE")
+            REMAIN=$((NEXT - NOW))
+            (( REMAIN < 0 )) && REMAIN=0
+
+            MM=$(printf "%02d" $((REMAIN / 60)))
+            SS=$(printf "%02d" $((REMAIN % 60)))
+
+            tput sc
+            tput cup $(($(tput lines)-2)) 0
+            echo -ne "⏱️  Next IP Change In : $MM:$SS   "
+            tput rc
+
+            sleep 1
+        done
+    ) & echo $! > "$COUNTDOWN_PID"
+}
+
+stop_countdown() {
+    [[ -f "$COUNTDOWN_PID" ]] && kill "$(cat "$COUNTDOWN_PID")" &>/dev/null
+    rm -f "$COUNTDOWN_PID"
 }
 
 # ---------- BANNER ----------
@@ -59,7 +104,7 @@ tor_changer_banner() {
     echo
     echo -e "\e[38;5;118m Tor Changer — Real IP Rotation via Tor ControlPort\e[0m"
     echo -e "\e[38;5;244m Status : $STATUS   |   Tor IP : $IP\e[0m"
-    echo -e "\e[38;5;244m Author : Kali-Prem | Platform : Kali Linux\e[0m"
+    echo -e "\e[38;5;244m Platform : Kali Linux\e[0m"
     echo
 }
 
@@ -133,7 +178,10 @@ force_new_ip() {
     for _ in {1..6}; do
         renew_ip
         NEW_IP=$(get_ip)
-        [[ "$NEW_IP" != "$OLD_IP" && -n "$NEW_IP" ]] && break
+        if [[ -n "$NEW_IP" && "$NEW_IP" != "$OLD_IP" ]]; then
+            notify_ip_change "$OLD_IP" "$NEW_IP"
+            break
+        fi
     done
 }
 
@@ -142,6 +190,9 @@ auto_renew() {
     INTERVAL=$((MIN * 60))
 
     date +%s | awk "{print \$1 + $INTERVAL}" > "$NEXT_RENEW_FILE"
+
+    stop_countdown
+    live_countdown
 
     (
         while true; do
@@ -153,8 +204,9 @@ auto_renew() {
 }
 
 stop_auto_renew() {
-    [[ -f "$AUTO_RENEW_PID" ]] && kill "$(cat "$AUTO_RENEW_PID")" && rm -f "$AUTO_RENEW_PID"
-    rm -f "$NEXT_RENEW_FILE"
+    [[ -f "$AUTO_RENEW_PID" ]] && kill "$(cat "$AUTO_RENEW_PID")" &>/dev/null
+    rm -f "$AUTO_RENEW_PID" "$NEXT_RENEW_FILE"
+    stop_countdown
 }
 
 pause() { read -p "Press Enter to continue..."; }
@@ -184,7 +236,7 @@ menu() {
         5) force_new_ip ;;
         6) auto_renew ;;
         7) stop_auto_renew ;;
-        0) exit 0 ;;
+        0) stop_countdown; exit 0 ;;
     esac
     pause
 }
