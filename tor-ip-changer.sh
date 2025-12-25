@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==========================================
-# TOR IP CHANGER — FULL FEATURED (KALI)
+# TOR IP CHANGER — FINAL BUILD (KALI)
 # ==========================================
 
 TOR_SERVICE="tor@default"
@@ -9,13 +9,11 @@ TORRC="/etc/tor/torrc"
 SOCKS_PORT=9050
 CONTROL_PORT=9051
 CHECK_IP_URL="https://check.torproject.org/api/ip"
-NYM_WAIT=15
 
 AUTO_RENEW_PID="/tmp/tor_auto_renew.pid"
 NEXT_RENEW_FILE="/tmp/tor_next_renew.time"
-COUNTDOWN_PID="/tmp/tor_countdown.pid"
 
-# ---------- CORE UTILS ----------
+# ---------- CORE ----------
 
 require_root() {
     [[ $EUID -ne 0 ]] && echo "[!] Run as root" && exit 1
@@ -26,75 +24,30 @@ tor_status() {
 }
 
 get_ip() {
-    curl --socks5-hostname 127.0.0.1:$SOCKS_PORT \
-         -H "Connection: close" -s "$CHECK_IP_URL" \
-         | grep -oE '"IP":"[^"]+' | cut -d'"' -f4
+    curl --socks5-hostname 127.0.0.1:$SOCKS_PORT -s "$CHECK_IP_URL" \
+        | grep -oE '"IP":"[^"]+' | cut -d'"' -f4
 }
 
 get_countdown() {
     [[ ! -f "$NEXT_RENEW_FILE" ]] && echo "N/A" && return
     NOW=$(date +%s)
     NEXT=$(cat "$NEXT_RENEW_FILE")
-    [[ "$NEXT" -le "$NOW" ]] && echo "00:00" && return
+    (( NEXT <= NOW )) && echo "00:00" && return
     REMAIN=$((NEXT - NOW))
     printf "%02d:%02d" $((REMAIN / 60)) $((REMAIN % 60))
 }
 
-# ---------- NOTIFICATION ----------
-
 notify_ip_change() {
-    local OLD_IP="$1"
-    local NEW_IP="$2"
-
-    # Terminal beep
     echo -ne "\a"
-
-    # Desktop notification (if available)
     if command -v notify-send &>/dev/null; then
-        notify-send "Tor IP Changed" \
-            "Old IP: $OLD_IP\nNew IP: $NEW_IP" \
-            --icon=network-vpn --urgency=low
+        notify-send "Tor IP Changed" "New IP: $1" --icon=network-vpn
     fi
 }
 
-# ---------- LIVE COUNTDOWN ----------
-
-live_countdown() {
-    (
-        while true; do
-            [[ ! -f "$NEXT_RENEW_FILE" ]] && sleep 1 && continue
-
-            NOW=$(date +%s)
-            NEXT=$(cat "$NEXT_RENEW_FILE")
-            REMAIN=$((NEXT - NOW))
-            (( REMAIN < 0 )) && REMAIN=0
-
-            MM=$(printf "%02d" $((REMAIN / 60)))
-            SS=$(printf "%02d" $((REMAIN % 60)))
-
-            tput sc
-            tput cup $(($(tput lines)-2)) 0
-            echo -ne "⏱️  Next IP Change In : $MM:$SS   "
-            tput rc
-
-            sleep 1
-        done
-    ) & echo $! > "$COUNTDOWN_PID"
-}
-
-stop_countdown() {
-    [[ -f "$COUNTDOWN_PID" ]] && kill "$(cat "$COUNTDOWN_PID")" &>/dev/null
-    rm -f "$COUNTDOWN_PID"
-}
-
-# ---------- BANNER ----------
+# ---------- YOUR ORIGINAL BANNER (UNCHANGED) ----------
 
 tor_changer_banner() {
     clear
-    STATUS=$(tor_status)
-    IP=$(get_ip)
-    [[ -z "$IP" ]] && IP="N/A"
-
     echo -e "\e[38;5;51m████████╗ \e[38;5;45m██████╗ \e[38;5;39m██████╗     \e[38;5;33m██████╗ \e[38;5;27m██╗  ██╗ \e[38;5;21m █████╗ \e[38;5;93m███╗   ██╗ \e[38;5;87m███████╗\e[0m"
     echo -e "\e[38;5;51m╚══██╔══╝ \e[38;5;45m██╔═══██╗\e[38;5;39m██╔═══██╗    \e[38;5;33m██╔════╝ \e[38;5;27m██║  ██║ \e[38;5;21m██╔══██╗\e[38;5;93m████╗  ██║ \e[38;5;87m██╔════╝\e[0m"
     echo -e "\e[38;5;51m   ██║    \e[38;5;45m██║   ██║\e[38;5;39m██║   ██║    \e[38;5;33m██║      \e[38;5;27m███████║ \e[38;5;21m███████║\e[38;5;93m██╔██╗ ██║ \e[38;5;87m█████╗\e[0m"
@@ -103,53 +56,18 @@ tor_changer_banner() {
     echo -e "\e[38;5;51m   ╚═╝     \e[38;5;45m╚═════╝  \e[38;5;39m╚═════╝     \e[38;5;33m ╚═════╝ \e[38;5;27m╚═╝  ╚═╝ \e[38;5;21m╚═╝  ╚═╝\e[38;5;93m╚═╝  ╚═══╝ \e[38;5;87m╚══════╝\e[0m"
     echo
     echo -e "\e[38;5;118m Tor Changer — Real IP Rotation via Tor ControlPort\e[0m"
-    echo -e "\e[38;5;244m Status : $STATUS   |   Tor IP : $IP\e[0m"
-    echo -e "\e[38;5;244m Platform : Kali Linux\e[0m"
+    echo -e "\e[38;5;244m Status : $(tor_status)   |   Tor IP : $(get_ip)\e[0m"
+    echo -e "\e[38;5;244m Next IP Change : $(get_countdown)\e[0m"
+    echo -e "\e[38;5;244m Author : [Kali-Prem] | GitHub: https://github.com/Kali-Prem\e[0m"
     echo
 }
 
-# ---------- RUNTIME STATUS ----------
-
-show_runtime_status() {
-    echo "------------------ Runtime Status ------------------"
-
-    systemctl is-active --quiet "$TOR_SERVICE" \
-        && echo "[Tor Service]      : RUNNING" \
-        || echo "[Tor Service]      : STOPPED"
-
-    TOR_PIDS=$(pgrep -x tor | tr '\n' ' ')
-    [[ -z "$TOR_PIDS" ]] && TOR_PIDS="None"
-    echo "[Tor PID(s)]       : $TOR_PIDS"
-
-    ss -tulnp | grep -q ":$SOCKS_PORT" \
-        && echo "[SOCKS 9050]       : LISTENING" \
-        || echo "[SOCKS 9050]       : NOT LISTENING"
-
-    ss -tulnp | grep -q ":$CONTROL_PORT" \
-        && echo "[Control 9051]     : LISTENING" \
-        || echo "[Control 9051]     : NOT LISTENING"
-
-    if [[ -f "$AUTO_RENEW_PID" ]] && ps -p "$(cat $AUTO_RENEW_PID)" &>/dev/null; then
-        echo "[Auto Renew]       : RUNNING (PID $(cat $AUTO_RENEW_PID))"
-        echo "[Next IP Change]   : $(get_countdown)"
-    else
-        echo "[Auto Renew]       : STOPPED"
-        echo "[Next IP Change]   : N/A"
-    fi
-
-    IP=$(get_ip)
-    [[ -z "$IP" ]] && IP="N/A"
-    echo "[Current Tor IP]   : $IP"
-
-    echo "----------------------------------------------------"
-    echo
-}
-
-# ---------- TOR LOGIC ----------
+# ---------- INSTALL ----------
 
 install_all() {
+    echo "[*] Installing Tor & dependencies..."
     apt update
-    apt install -y tor curl netcat-openbsd iptables
+    apt install -y tor curl netcat-openbsd iptables libnotify-bin
 
     cat <<EOF > "$TORRC"
 SOCKSPort 9050
@@ -163,82 +81,80 @@ EOF
     systemctl enable "$TOR_SERVICE"
     systemctl restart "$TOR_SERVICE"
     sleep 5
+    read -p "Installation complete. Press Enter..."
 }
 
-start_tor() { systemctl start "$TOR_SERVICE"; sleep 5; }
-stop_tor()  { systemctl stop "$TOR_SERVICE"; }
+# ---------- TOR LOGIC ----------
 
 renew_ip() {
-    echo -e 'AUTHENTICATE ""\nSIGNAL NEWNYM\nQUIT' | nc 127.0.0.1 $CONTROL_PORT >/dev/null 2>&1
-    sleep $NYM_WAIT
+    echo -e 'AUTHENTICATE ""\nSIGNAL NEWNYM\nQUIT' | nc 127.0.0.1 $CONTROL_PORT &>/dev/null
+    sleep 5
 }
 
 force_new_ip() {
-    OLD_IP=$(get_ip)
-    for _ in {1..6}; do
-        renew_ip
-        NEW_IP=$(get_ip)
-        if [[ -n "$NEW_IP" && "$NEW_IP" != "$OLD_IP" ]]; then
-            notify_ip_change "$OLD_IP" "$NEW_IP"
-            break
-        fi
-    done
+    OLD=$(get_ip)
+    renew_ip
+    NEW=$(get_ip)
+    [[ -n "$NEW" && "$OLD" != "$NEW" ]] && notify_ip_change "$NEW"
 }
 
 auto_renew() {
-    read -p "Auto renew interval (minutes): " MIN
+    read -p "Interval (minutes): " MIN
     INTERVAL=$((MIN * 60))
-
-    date +%s | awk "{print \$1 + $INTERVAL}" > "$NEXT_RENEW_FILE"
-
-    stop_countdown
-    live_countdown
+    echo $(( $(date +%s) + INTERVAL )) > "$NEXT_RENEW_FILE"
 
     (
         while true; do
             force_new_ip
-            date +%s | awk "{print \$1 + $INTERVAL}" > "$NEXT_RENEW_FILE"
+            echo $(( $(date +%s) + INTERVAL )) > "$NEXT_RENEW_FILE"
             sleep "$INTERVAL"
         done
     ) & echo $! > "$AUTO_RENEW_PID"
 }
 
 stop_auto_renew() {
-    [[ -f "$AUTO_RENEW_PID" ]] && kill "$(cat "$AUTO_RENEW_PID")" &>/dev/null
+    [[ -f "$AUTO_RENEW_PID" ]] && kill "$(cat "$AUTO_RENEW_PID")"
     rm -f "$AUTO_RENEW_PID" "$NEXT_RENEW_FILE"
-    stop_countdown
 }
 
-pause() { read -p "Press Enter to continue..."; }
+update_repo() {
+    if git rev-parse --is-inside-work-tree &>/dev/null; then
+        git pull
+    else
+        echo "[!] Not a git repository"
+    fi
+    read -p "Press Enter..."
+}
 
 # ---------- MENU ----------
 
 menu() {
     tor_changer_banner
-    echo "1) Install & Setup"
+    echo "1) Install & Setup(recommended)"
     echo "2) Start Tor"
     echo "3) Stop Tor"
     echo "4) Show Tor IP"
     echo "5) Force New IP"
     echo "6) Auto Renew"
     echo "7) Stop Auto Renew"
+    echo "R) Refresh"
+    echo "U) Update Repository"
     echo "0) Exit"
-    echo "======================================"
-
-    show_runtime_status
+    echo
 
     read -p "Select option: " CHOICE
     case "$CHOICE" in
         1) install_all ;;
-        2) start_tor ;;
-        3) stop_tor ;;
-        4) echo "Tor IP: $(get_ip)" ;;
+        2) systemctl start "$TOR_SERVICE" ;;
+        3) systemctl stop "$TOR_SERVICE" ;;
+        4) echo "Tor IP: $(get_ip)"; read -p "Press Enter..." ;;
         5) force_new_ip ;;
         6) auto_renew ;;
         7) stop_auto_renew ;;
-        0) stop_countdown; exit 0 ;;
+        R|r) return ;;
+        U|u) update_repo ;;
+        0) exit 0 ;;
     esac
-    pause
 }
 
 require_root
