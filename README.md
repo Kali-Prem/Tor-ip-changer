@@ -74,7 +74,7 @@ Route applications through Tor:
                     ↪ select Manual proxy
                     ↪ Put Socks Host: 127.0.0.1 and Port: 9050
                     ↪ Then ok
-<img width="1624" height="877" alt="Screenshot (10)" src="https://github.com/user-attachments/assets/44e16898-1b29-4587-9c4f-acd7d1b65c11" />
+
 
 
 ```
@@ -89,13 +89,10 @@ Route applications through Tor:
 
 ![Main Menu](image/final.png)
 
-### Exit Country Selection
+### Route applications through Tor
 
-![Country Selector](screenshots/country.png)
+![Setup in Browser](image/Screenshot(10).png)
 
-### IP Rotation & Status
-
-![IP Check](screenshots/ip-check.png)
 
 ---
 
