@@ -108,10 +108,12 @@ This project is intended for **educational and privacy‑enhancing purposes only
 
 ## 📄 License
 
-MIT License — free to use, modify, and learn responsibly.
+MIT License — free to use.
 
 ---
 
 ## 🤝 Contributing
 
 Pull requests are welcome. Suggestions, issues, and improvements are appreciated.
+
+
