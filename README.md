@@ -69,8 +69,14 @@ sudo ./tor-ip-changer.sh
 Route applications through Tor:
 
 ```bash
-proxychains firefox
-proxychains curl ifconfig.me
+ Setup in Browser:- ↪ Go to browser settings
+                    ↪ open browser proxy
+                    ↪ select Manual proxy
+                    ↪ Put Socks Host: 127.0.0.1 and Port: 9050
+                    ↪ Then ok
+<img width="1624" height="877" alt="Screenshot (10)" src="https://github.com/user-attachments/assets/44e16898-1b29-4587-9c4f-acd7d1b65c11" />
+
+
 ```
 
 ---
