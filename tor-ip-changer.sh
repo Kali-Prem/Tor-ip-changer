@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==========================================
-# TOR IP CHANGER — FINAL COMPLETE BUILD
+# TOR IP CHANGER — Kali-Prem FINAL VERSION
 # ==========================================
 
 TOR_SERVICE="tor@default"
@@ -56,6 +56,7 @@ tor_changer_banner() {
     echo
     echo -e "\e[38;5;118m Tor Changer — Real IP Rotation via Tor ControlPort\e[0m"
     echo -e "\e[38;5;244m Status : $(tor_status) | Tor IP : $(get_ip) | Next : $(get_countdown)\e[0m"
+    echo -e "\e[38;5;244m Author:~[Kali-Prem] | Github: https://github.com/Kali-Prem\e[0m"
     echo
 }
 
@@ -132,7 +133,7 @@ update_repo() {
 
 menu() {
     tor_changer_banner
-    echo "1) Install & Setup"
+    echo "1) Install & Setup(Recommended)"
     echo "2) Start Tor"
     echo "3) Stop Tor"
     echo "4) Show Tor IP"
