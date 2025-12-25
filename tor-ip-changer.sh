@@ -112,7 +112,7 @@ pause() { read -p "Press Enter to continue..."; }
 
 menu() {
     tor_changer_banner
-    echo "1) Install & Setup"
+    echo "1) Install & Setup(recommended)"
     echo "2) Start Tor"
     echo "3) Stop Tor"
     echo "4) Show Tor IP"
