@@ -87,7 +87,7 @@ Route applications through Tor:
 
 ### Main Menu
 
-![Main Menu](image/final)
+![Main Menu](image/final.png)
 
 ### Exit Country Selection
 
