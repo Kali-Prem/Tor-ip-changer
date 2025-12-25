@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==========================================
-# TOR IP CHANGER — FINAL BUILD (KALI)
+# TOR IP CHANGER — FINAL COMPLETE BUILD
 # ==========================================
 
 TOR_SERVICE="tor@default"
@@ -39,12 +39,11 @@ get_countdown() {
 
 notify_ip_change() {
     echo -ne "\a"
-    if command -v notify-send &>/dev/null; then
+    command -v notify-send &>/dev/null && \
         notify-send "Tor IP Changed" "New IP: $1" --icon=network-vpn
-    fi
 }
 
-# ---------- YOUR ORIGINAL BANNER (UNCHANGED) ----------
+# ---------- YOUR ORIGINAL BANNER ----------
 
 tor_changer_banner() {
     clear
@@ -56,19 +55,28 @@ tor_changer_banner() {
     echo -e "\e[38;5;51m   ╚═╝     \e[38;5;45m╚═════╝  \e[38;5;39m╚═════╝     \e[38;5;33m ╚═════╝ \e[38;5;27m╚═╝  ╚═╝ \e[38;5;21m╚═╝  ╚═╝\e[38;5;93m╚═╝  ╚═══╝ \e[38;5;87m╚══════╝\e[0m"
     echo
     echo -e "\e[38;5;118m Tor Changer — Real IP Rotation via Tor ControlPort\e[0m"
-    echo -e "\e[38;5;244m Status : $(tor_status)   |   Tor IP : $(get_ip)\e[0m"
-    echo -e "\e[38;5;244m Next IP Change : $(get_countdown)\e[0m"
-    echo -e "\e[38;5;244m Author : [Kali-Prem] | GitHub: https://github.com/Kali-Prem\e[0m"
+    echo -e "\e[38;5;244m Status : $(tor_status) | Tor IP : $(get_ip) | Next : $(get_countdown)\e[0m"
+    echo
+}
+
+# ---------- RUNNING STATUS (BELOW MENU) ----------
+
+show_runtime_status() {
+    echo "------------------ Running Status ------------------"
+    echo "Tor Service     : $(tor_status)"
+    echo "Tor PID(s)      : $(pgrep -x tor | tr '\n' ' ' || echo None)"
+    ss -lnt | grep -q ":$SOCKS_PORT" && echo "SOCKS 9050     : LISTENING" || echo "SOCKS 9050     : NOT LISTENING"
+    ss -lnt | grep -q ":$CONTROL_PORT" && echo "Control 9051   : LISTENING" || echo "Control 9051   : NOT LISTENING"
+    [[ -f "$AUTO_RENEW_PID" ]] && echo "Auto Renew     : RUNNING" || echo "Auto Renew     : STOPPED"
+    echo "----------------------------------------------------"
     echo
 }
 
 # ---------- INSTALL ----------
 
 install_all() {
-    echo "[*] Installing Tor & dependencies..."
     apt update
     apt install -y tor curl netcat-openbsd iptables libnotify-bin
-
     cat <<EOF > "$TORRC"
 SOCKSPort 9050
 ControlPort 9051
@@ -77,11 +85,9 @@ UseEntryGuards 0
 NewCircuitPeriod 10
 MaxCircuitDirtiness 10
 EOF
-
     systemctl enable "$TOR_SERVICE"
     systemctl restart "$TOR_SERVICE"
-    sleep 5
-    read -p "Installation complete. Press Enter..."
+    read -p "Install complete. Press Enter..."
 }
 
 # ---------- TOR LOGIC ----------
@@ -102,7 +108,6 @@ auto_renew() {
     read -p "Interval (minutes): " MIN
     INTERVAL=$((MIN * 60))
     echo $(( $(date +%s) + INTERVAL )) > "$NEXT_RENEW_FILE"
-
     (
         while true; do
             force_new_ip
@@ -118,11 +123,7 @@ stop_auto_renew() {
 }
 
 update_repo() {
-    if git rev-parse --is-inside-work-tree &>/dev/null; then
-        git pull
-    else
-        echo "[!] Not a git repository"
-    fi
+    git rev-parse --is-inside-work-tree &>/dev/null && git pull || echo "Not a git repo"
     read -p "Press Enter..."
 }
 
@@ -130,7 +131,7 @@ update_repo() {
 
 menu() {
     tor_changer_banner
-    echo "1) Install & Setup(recommended)"
+    echo "1) Install & Setup"
     echo "2) Start Tor"
     echo "3) Stop Tor"
     echo "4) Show Tor IP"
@@ -141,6 +142,8 @@ menu() {
     echo "U) Update Repository"
     echo "0) Exit"
     echo
+
+    show_runtime_status
 
     read -p "Select option: " CHOICE
     case "$CHOICE" in
