@@ -113,9 +113,18 @@ pause() { read -p "Press Enter to continue..."; }
 
 menu() {
     clear
-    echo "======================================"
-    echo " TOR IP CHANGER — FINAL FIXED VERSION "
-    echo "======================================"
+    echo "============================================================================================="
+    echo  "|''||''|                         ..|'''.| '||                                               "
+    echo  "   ||      ...   ... ..        .|'     '   || ..    ....   .. ...     ... .   ....  ... ..  "
+    echo  "   ||    .|  '|.  ||' ''       ||          ||' ||  '' .||   ||  ||   || ||  .|...||  ||' '' "
+    echo  "   ||    ||   ||  ||           '|.      .  ||  ||  .|' ||   ||  ||    |''   ||       ||     "
+    echo  "  .||.    '|..|' .||.           ''|....'  .||. ||. '|..'|' .||. ||.  '||||.  '|...' .||.    "
+    echo  "                                                                     .|....'                 "
+    echo "   By:- Kali-Prem"
+    echo "   GitHub:- https://github.com/Kali-Prem"
+    echo "   Version:- 1.0.0 (Last Updated: Dec 2025)"
+    echo "============================================================================================="
+    
     echo "1) Install & Setup (RECOMMENDED)"
     echo "2) Start Tor"
     echo "3) Stop Tor"
@@ -124,6 +133,7 @@ menu() {
     echo "6) Auto Renew"
     echo "7) Stop Auto Renew"
     echo "0) Exit"
+    
     echo "======================================"
     read -p "Select option: " CHOICE
 
